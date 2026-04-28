@@ -91,15 +91,31 @@ function doPost(e) {
       }
     }
 
-    const newRow = sheet.getLastRow() + 1;
+    // B컬럼 기준 마지막 데이터 행 찾기 (다른 컬럼에 멀리 떨어진 데이터가 있어도 영향 없음)
+    const sheetLastRow = Math.max(sheet.getLastRow(), 1);
+    const bValues = sheet.getRange(1, 2, sheetLastRow, 1).getValues();
+    let lastBRow = 1;
+    for (let i = bValues.length - 1; i >= 0; i--) {
+      const v = bValues[i][0];
+      if (v !== '' && v !== null && v !== undefined) {
+        lastBRow = i + 1;
+        break;
+      }
+    }
+    const newRow = lastBRow + 1;
+
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
     sheet.getRange(newRow, 4).setValue(branch);     // D 매장명 (E~H 자동)
     sheet.getRange(newRow, 10).setValue(issueSummary); // J 접수내용
+    SpreadsheetApp.flush();
 
     return _json({
       ok: true,
       row: newRow,
+      sheetName: sheet.getName(),
+      sheetLastRowBefore: sheetLastRow,
+      lastBRowBefore: lastBRow,
       branch: branch,
     });
   } catch (err) {

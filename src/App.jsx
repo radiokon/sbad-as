@@ -800,9 +800,14 @@ export default function App() {
                   <CheckCircle2 className="w-9 h-9" style={{ color: '#3F8B5E' }} />
                 </div>
                 <div className="text-lg font-bold mb-2" style={{ color: INK }}>{t.submitSuccessTitle}</div>
-                <div className="text-sm leading-relaxed mb-6" style={{ color: INK_MUTED }}>
+                <div className="text-sm leading-relaxed mb-2" style={{ color: INK_MUTED }}>
                   {t.submitSuccessBody}
                 </div>
+                {submitResult.sheetName && submitResult.row && (
+                  <div className="text-[11px] mb-6 px-3 py-2 rounded-lg inline-block" style={{ color: INK_MUTED, backgroundColor: IVORY_SOFT, border: '1px solid #EFE7D2' }}>
+                    {`${submitResult.sheetName} · ${submitResult.row}행`}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <button onClick={resetRequestForm}
                     className="w-full py-3 rounded-xl text-sm font-bold"
