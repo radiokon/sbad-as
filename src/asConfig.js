@@ -1,7 +1,7 @@
 // AS 신청 백엔드 설정. Apps Script Web App URL을 발급받으면 여기 값을 교체.
 // 형식: https://script.google.com/macros/s/AKfycbx.../exec
 
-export const APPS_SCRIPT_URL = '__SET_APPS_SCRIPT_URL__';
+export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiPXHeR1n0ugk7ZcgyeAzCUyVzjxufK2yo2wOGa58Ubnw5ymFYLaH-fgE6y0v0MNRH4A/exec';
 
 export const HQ_AS_PHONE = '010-5420-4250';
 
