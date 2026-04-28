@@ -70,7 +70,7 @@ function doGet(e) {
       return _json({ ok: true, sheet: sheet.getName(), rows: rows });
     }
     if (action === 'version') {
-      return _json({ ok: true, version: 'v3-Dcol-2026-04-29' });
+      return _json({ ok: true, version: 'v4-append-2026-04-29' });
     }
     return _json({ ok: true, message: 'AS request endpoint. POST to submit.' });
   } catch (err) {
@@ -112,23 +112,14 @@ function doPost(e) {
       }
     }
 
-    // D 컬럼(매장명)만 기준으로 첫 빈 행을 찾음. D는 사람이 직접 입력하는 컬럼이라
-    // 시트 자동수식의 영향 받지 않음. 본사 처리 행도 D 채워짐, 우리 신청도 D 채워짐.
-    // D가 비어있는 첫 행 = 진짜 빈 행.
-    const HEADER = 3;
+    // 시트의 시간순 가장 마지막 데이터 행을 찾고 그 다음 행에 추가.
+    // 어느 컬럼이라도 데이터 있는 행을 '데이터 행'으로 본다 (그룹 라벨 행 포함).
+    // 이렇게 하면 시트 위쪽의 빈 영역이나 라벨 행에 잘못 들어가지 않음.
     const SEARCH_LIMIT = 2000;
     const limit = Math.min(SEARCH_LIMIT, sheet.getMaxRows());
     const isEmpty = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || v === '';
 
-    const dValues = sheet.getRange(1, 4, limit, 1).getValues();
-    let newRow = 0;
-    for (let i = HEADER; i < dValues.length; i++) {
-      if (isEmpty(dValues[i][0])) { newRow = i + 1; break; }
-    }
-    if (newRow === 0) newRow = limit + 1;
-
-    // 디버그: 각 컬럼 마지막 채워진 행
-    const block = sheet.getRange(1, 1, limit, 10).getValues();
+    const block = sheet.getRange(1, 1, limit, 13).getValues(); // A~M
     const findLast = (col) => {
       for (let i = block.length - 1; i >= 0; i--) {
         if (!isEmpty(block[i][col])) return i + 1;
@@ -140,6 +131,12 @@ function doPost(e) {
     const lastC = findLast(2);
     const lastD = findLast(3);
     const lastJ = findLast(9);
+    const lastK = findLast(10);
+    const lastL = findLast(11);
+    const lastM = findLast(12);
+
+    const lastDataRow = Math.max(lastA, lastB, lastC, lastD, lastJ, lastK, lastL, lastM);
+    let newRow = Math.max(lastDataRow + 1, 4); // 헤더 영역(1~3) 보호
 
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
@@ -152,7 +149,8 @@ function doPost(e) {
       row: newRow,
       sheetName: sheet.getName(),
       branch: branch,
-      version: 'v3-Dcol',
+      version: 'v4-append',
+      lastDataRow: lastDataRow,
       lastA: lastA, lastB: lastB, lastC: lastC, lastD: lastD, lastJ: lastJ,
     });
   } catch (err) {
