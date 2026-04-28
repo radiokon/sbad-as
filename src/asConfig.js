@@ -3,8 +3,6 @@
 
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiPXHeR1n0ugk7ZcgyeAzCUyVzjxufK2yo2wOGa58Ubnw5ymFYLaH-fgE6y0v0MNRH4A/exec';
 
-export const HQ_AS_PHONE = '010-5420-4250';
-
 // 매장 마스터(접수 시트) ID — D컬럼 unique 추출용 (드롭다운 옵션 데이터 소스)
 export const REQUEST_SHEET_ID = '1HYnYrmdBX9Qzg3JV8gSaxXUysbIwvYPuXBMfGGJX3oE';
 

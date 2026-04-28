@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Search, ChevronRight, ChevronLeft, Phone, AlertTriangle,
+  Search, ChevronRight, ChevronLeft, AlertTriangle,
   Snowflake, Wind, Lightbulb, Zap,
   Utensils, Wrench, CheckCircle2, XCircle,
   Home, BookOpen, AlertCircle,
   Clock, Shield, Leaf, ExternalLink, Settings,
   Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe,
-  MessageSquare, Send, Camera, X, Plus
+  MessageSquare, Send, Camera, X
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
 import { APPS_SCRIPT_URL, STORES_CSV_URL, isAppsScriptConfigured } from './asConfig.js';
@@ -79,16 +79,13 @@ const i18n = {
     callIfLabel: '본사 AS 신청 기준',
     callHQ: '본사 AS팀 신청',
     daumSubmit: '다움FC 접수 (1년 이전 매장)',
-    feedbackQuestion: '이 매뉴얼이 도움 되셨나요?',
-    solved: '해결됐어요',
-    notSolved: '안 됐어요',
     loading: '매뉴얼 불러오는 중...',
     errorTitle: '데이터 로드 실패',
     errorDefault: '매뉴얼 데이터를 불러오는 중 문제가 발생했어요.',
     retry: '다시 시도',
     langButton: 'EN',
     requestTitle: '본사 AS팀 신청서',
-    requestIntro: '아래 양식을 작성하고 [신청하기]를 누르면 본사 AS팀(010-5420-4250)으로 문자가 발송됩니다.',
+    requestIntro: '아래 양식을 작성하고 [신청하기]를 눌러주세요. 본사 시트에 자동 등록되고 사진은 드라이브에 업로드됩니다.',
     fieldStoreName: '매장명',
     storePrefix: '샤브올데이',
     storePlaceholder: '예: 강남점',
@@ -103,9 +100,7 @@ const i18n = {
     fieldPhotos: '사진 첨부 (선택)',
     addPhoto: '사진 추가',
     photoCountHint: (n) => `사진 ${n}장 첨부됨`,
-    photoNote: '신청하기를 누르면 사진이 본사 드라이브에 자동 업로드됩니다.',
     submitForm: '신청하기',
-    submitNote: '신청하면 본사 시트에 자동 등록되고 사진이 드라이브에 업로드됩니다.',
     formAlertNoIssue: '하자내용을 입력해주세요.',
     backLabel: '뒤로',
     selectStorePlaceholder: '매장 검색',
@@ -159,16 +154,13 @@ const i18n = {
     callIfLabel: 'When to Request HQ AS',
     callHQ: 'Submit AS Request to HQ',
     daumSubmit: 'Submit to Daum FC (stores over 1 year)',
-    feedbackQuestion: 'Was this manual helpful?',
-    solved: 'Solved',
-    notSolved: "Didn't work",
     loading: 'Loading manual...',
     errorTitle: 'Failed to load',
     errorDefault: 'Failed to load manual data.',
     retry: 'Retry',
     langButton: '한',
     requestTitle: 'AS Request Form',
-    requestIntro: 'Fill out the form and tap [Submit] to send an SMS to HQ AS Team (010-5420-4250).',
+    requestIntro: 'Fill out the form and tap [Submit]. Your request is logged to the HQ sheet and photos uploaded to Drive.',
     fieldStoreName: 'Store Name',
     storePrefix: 'Shabuallday',
     storePlaceholder: 'e.g., Gangnam',
@@ -183,9 +175,7 @@ const i18n = {
     fieldPhotos: 'Attach Photos (optional)',
     addPhoto: 'Add Photo',
     photoCountHint: (n) => `${n} photo${n === 1 ? '' : 's'} attached`,
-    photoNote: 'Photos will be uploaded to the HQ Drive automatically when you submit.',
     submitForm: 'Submit Request',
-    submitNote: 'Your request is logged to the HQ sheet and photos uploaded to Drive automatically.',
     formAlertNoIssue: 'Please enter the issue description.',
     backLabel: 'Back',
     selectStorePlaceholder: 'Search stores',
@@ -834,17 +824,6 @@ export default function App() {
                   <ExternalLink className="w-4 h-4" />{t.daumSubmit}
                 </a>
               </div>
-              <div className="pt-4 pb-2">
-                <div className="text-xs text-center mb-3" style={{ color: INK_MUTED }}>{t.feedbackQuestion}</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button className="py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ backgroundColor: IVORY_SOFT, border: '1px solid #EFE7D2', color: INK }}>
-                    <CheckCircle2 className="w-4 h-4" style={{ color: '#3F8B5E' }} />{t.solved}
-                  </button>
-                  <button className="py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors" style={{ backgroundColor: IVORY_SOFT, border: '1px solid #EFE7D2', color: INK }}>
-                    <XCircle className="w-4 h-4" style={{ color: '#C84A3F' }} />{t.notSolved}
-                  </button>
-                </div>
-              </div>
             </div>
           </>
         )}
@@ -1056,7 +1035,6 @@ export default function App() {
                   <input type="file" accept="image/*" multiple capture="environment"
                     onChange={handlePhotoAdd} className="hidden" />
                 </label>
-                <div className="text-[11px] mt-2 leading-relaxed" style={{ color: '#9C621A' }}>{t.photoNote}</div>
               </div>
 
               <div className="pt-3 space-y-2">
@@ -1065,7 +1043,6 @@ export default function App() {
                   style={{ backgroundColor: TEAL, color: 'white' }}>
                   <Send className="w-4 h-4" />{t.submitForm}
                 </button>
-                <div className="text-[11px] text-center leading-relaxed" style={{ color: INK_MUTED }}>{t.submitNote}</div>
               </div>
             </div>
             )}
