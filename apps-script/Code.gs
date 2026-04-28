@@ -91,20 +91,32 @@ function doPost(e) {
       }
     }
 
-    // A컬럼(접수넘버) 기준 마지막 데이터 행의 다음 = 첫 빈 행
-    // B/C/D 등 다른 컬럼의 기존 데이터에 영향받지 않음
-    const sheetLastRow = Math.max(sheet.getLastRow(), 1);
-    const aValues = sheet.getRange(1, 1, sheetLastRow, 1).getValues();
-    let lastARow = 0;
-    for (let i = aValues.length - 1; i >= 0; i--) {
+    // A컬럼(접수넘버)에서 헤더(1~3행) 이후 처음으로 비어있는 행을 찾음.
+    // 본사가 처리한 행은 A에 접수넘버를 매기고, 처리 안 된 빈 영역은 A가 비어있다는 가정.
+    // 시트 maxRows까지 확장해서 검색 (sheet.getLastRow는 다른 컬럼 영향 받음)
+    const HEADER_ROWS = 3;
+    const maxRows = sheet.getMaxRows();
+    const aValues = sheet.getRange(1, 1, maxRows, 1).getValues();
+    let newRow = 0;
+    for (let i = HEADER_ROWS; i < aValues.length; i++) {
       const v = aValues[i][0];
-      if (v !== '' && v !== null && v !== undefined) {
-        lastARow = i + 1;
+      if (v === '' || v === null || v === undefined) {
+        newRow = i + 1;
         break;
       }
     }
-    // A가 비어있으면 헤더 다음(4행)부터 시작 (시트 1~3행이 헤더 영역)
-    const newRow = Math.max(lastARow + 1, 4);
+    if (newRow === 0) newRow = maxRows + 1; // 못 찾으면 끝에 추가
+
+    // 안전장치: 그 행의 B/C/D/J가 이미 채워져 있으면 다음 빈 행으로 이동
+    // (본사가 A는 안 채웠지만 다른 컬럼에 일부 입력해둔 경우)
+    let scanRow = newRow;
+    while (scanRow <= maxRows) {
+      const row = sheet.getRange(scanRow, 1, 1, 10).getValues()[0];
+      const occupied = row[0] || row[1] || row[2] || row[3] || row[9];
+      if (!occupied) break;
+      scanRow++;
+    }
+    newRow = scanRow;
 
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
@@ -116,8 +128,6 @@ function doPost(e) {
       ok: true,
       row: newRow,
       sheetName: sheet.getName(),
-      sheetLastRowBefore: sheetLastRow,
-      lastARowBefore: lastARow,
       branch: branch,
     });
   } catch (err) {
