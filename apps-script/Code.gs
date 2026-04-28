@@ -51,6 +51,27 @@ function doGet(e) {
       const tabs = ss.getSheets().map(s => ({ name: s.getName(), id: s.getSheetId() }));
       return _json({ ok: true, target: SHEET_NAME, tabs: tabs });
     }
+    if (action === 'peek') {
+      const ss = SpreadsheetApp.openById(SHEET_ID);
+      let sheet = ss.getSheetByName(SHEET_NAME);
+      if (!sheet) {
+        const cs = ss.getSheets().filter(s => /AS/i.test(s.getName()));
+        if (cs.length === 1) sheet = cs[0];
+      }
+      if (!sheet) return _json({ ok: false, error: 'sheet not found' });
+      const from = parseInt(e.parameter.from, 10) || 370;
+      const to = parseInt(e.parameter.to, 10) || (from + 10);
+      const count = Math.max(1, Math.min(50, to - from + 1));
+      const values = sheet.getRange(from, 1, count, 13).getValues();
+      const rows = values.map((r, i) => ({
+        row: from + i,
+        A: r[0], B: r[1], C: r[2], D: r[3], J: r[9], K: r[10],
+      }));
+      return _json({ ok: true, sheet: sheet.getName(), rows: rows });
+    }
+    if (action === 'version') {
+      return _json({ ok: true, version: 'v3-Dcol-2026-04-29' });
+    }
     return _json({ ok: true, message: 'AS request endpoint. POST to submit.' });
   } catch (err) {
     return _json({ ok: false, error: String(err) });
@@ -91,32 +112,34 @@ function doPost(e) {
       }
     }
 
-    // 헤더(1~3행) 이후, A/B/C/D/J 다섯 컬럼이 모두 비어있는 첫 행을 찾음.
-    // 어떤 컬럼이라도 채워져 있으면 '데이터 있는 행'으로 판단 (시트 자동수식 영향 회피).
+    // D 컬럼(매장명)만 기준으로 첫 빈 행을 찾음. D는 사람이 직접 입력하는 컬럼이라
+    // 시트 자동수식의 영향 받지 않음. 본사 처리 행도 D 채워짐, 우리 신청도 D 채워짐.
+    // D가 비어있는 첫 행 = 진짜 빈 행.
     const HEADER = 3;
     const SEARCH_LIMIT = 2000;
     const limit = Math.min(SEARCH_LIMIT, sheet.getMaxRows());
-    const block = sheet.getRange(1, 1, limit, 10).getValues();
-
     const isEmpty = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || v === '';
-    const rowEmpty = (r) => isEmpty(r[0]) && isEmpty(r[1]) && isEmpty(r[2]) && isEmpty(r[3]) && isEmpty(r[9]);
 
+    const dValues = sheet.getRange(1, 4, limit, 1).getValues();
     let newRow = 0;
-    for (let i = HEADER; i < block.length; i++) {
-      if (rowEmpty(block[i])) {
-        newRow = i + 1;
-        break;
-      }
+    for (let i = HEADER; i < dValues.length; i++) {
+      if (isEmpty(dValues[i][0])) { newRow = i + 1; break; }
     }
-
-    // 디버그: A컬럼 마지막 채워진 행
-    let lastARow = 0;
-    for (let i = block.length - 1; i >= 0; i--) {
-      if (!isEmpty(block[i][0])) { lastARow = i + 1; break; }
-    }
-
-    // 못 찾으면 검색 범위 끝 다음
     if (newRow === 0) newRow = limit + 1;
+
+    // 디버그: 각 컬럼 마지막 채워진 행
+    const block = sheet.getRange(1, 1, limit, 10).getValues();
+    const findLast = (col) => {
+      for (let i = block.length - 1; i >= 0; i--) {
+        if (!isEmpty(block[i][col])) return i + 1;
+      }
+      return 0;
+    };
+    const lastA = findLast(0);
+    const lastB = findLast(1);
+    const lastC = findLast(2);
+    const lastD = findLast(3);
+    const lastJ = findLast(9);
 
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
@@ -129,8 +152,8 @@ function doPost(e) {
       row: newRow,
       sheetName: sheet.getName(),
       branch: branch,
-      lastARow: lastARow,
-      searchedRows: block.length,
+      version: 'v3-Dcol',
+      lastA: lastA, lastB: lastB, lastC: lastC, lastD: lastD, lastJ: lastJ,
     });
   } catch (err) {
     return _json({ ok: false, error: String(err) });
