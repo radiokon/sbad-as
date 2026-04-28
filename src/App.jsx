@@ -9,7 +9,7 @@ import {
   MessageSquare, Send, Camera, X
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
-import { APPS_SCRIPT_URL, STORES_CSV_URL, isAppsScriptConfigured } from './asConfig.js';
+import { APPS_SCRIPT_URL, STORES_CSV_URL, EXCLUDED_STORES, isAppsScriptConfigured } from './asConfig.js';
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -287,7 +287,8 @@ export default function App() {
     fetch(STORES_CSV_URL)
       .then(r => r.text())
       .then(text => {
-        const arr = parseStoresCSV(text);
+        const exclude = new Set(EXCLUDED_STORES);
+        const arr = parseStoresCSV(text).filter(s => !exclude.has(s));
         setStores(arr);
         setStoresLoaded(true);
         try {

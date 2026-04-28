@@ -7,11 +7,14 @@ export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiPXHeR
 export const REQUEST_SHEET_ID = '1HYnYrmdBX9Qzg3JV8gSaxXUysbIwvYPuXBMfGGJX3oE';
 
 // 매장 마스터 탭(gid=1021023439) B컬럼.
-// 매장 No 1~172 = 시트 행 5~176. 그 뒤(B177=안산선부 No.177, B178=경주용황 No.173)는
-// 비순차 추가 행이라 사용자 요청대로 제외.
+// 시트 행 5~177 = 정식 매장 173개 (B5 김포운양 ~ B177 안산선부).
+// B178(경주용황)은 미오픈이라 제외.
 const STORES_GID = '1021023439';
 export const STORES_CSV_URL =
-  `https://docs.google.com/spreadsheets/d/${REQUEST_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${STORES_GID}&range=B5:B176`;
+  `https://docs.google.com/spreadsheets/d/${REQUEST_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${STORES_GID}&range=B5:B177`;
+
+// 폐점 / 미오픈 등 드롭다운에서 숨길 매장.
+export const EXCLUDED_STORES = ['다산신도시'];
 
 export const isAppsScriptConfigured = () =>
   APPS_SCRIPT_URL && APPS_SCRIPT_URL !== '__SET_APPS_SCRIPT_URL__';
