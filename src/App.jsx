@@ -6,26 +6,17 @@ import {
   Home, BookOpen, AlertCircle,
   Clock, Shield, Leaf, ExternalLink, Settings,
   Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe,
-  MessageSquare, Send, Camera, X
+  MessageSquare, Send, X
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
 import { APPS_SCRIPT_URL, STORES_CSV_URL, EXCLUDED_STORES, isAppsScriptConfigured } from './asConfig.js';
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      const idx = result.indexOf('base64,');
-      resolve({
-        name: file.name || 'photo.jpg',
-        mimeType: file.type || 'image/jpeg',
-        data: idx >= 0 ? result.substring(idx + 7) : result,
-      });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// UTF-8 안전 base64 인코딩 (Apps Script가 그대로 디코딩하면 한글 보존)
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 function parseStoresCSV(text) {
@@ -96,9 +87,6 @@ const i18n = {
     managerPlaceholder: '담당자 성함',
     fieldContact: '연락처',
     contactPlaceholder: '010-0000-0000',
-    fieldPhotos: '사진 첨부 (선택)',
-    addPhoto: '사진 추가',
-    photoCountHint: (n) => `사진 ${n}장 첨부됨`,
     submitForm: '신청하기',
     formAlertNoIssue: '하자내용을 입력해주세요.',
     backLabel: '뒤로',
@@ -111,15 +99,12 @@ const i18n = {
     submittingTitle: '접수 처리 중',
     submittingDetail: '시트 등록 + 사진 업로드 중입니다.\n잠시만 기다려주세요.',
     submitSuccessTitle: '신청 접수 완료',
-    submitSuccessBody: (n) => n > 0
-      ? `사진 ${n}장이 함께 업로드되었습니다.\n본사 AS팀이 확인 후 연락드립니다.`
-      : '본사 AS팀이 시트에서 확인 후 연락드립니다.',
+    submitSuccessBody: '본사 AS팀이 시트에서 확인 후 연락드립니다.',
     submitFailTitle: '접수 실패',
     submitFailBody: '잠시 후 다시 시도해주세요.',
     submitRetry: '다시 시도',
     submitNewRequest: '새 신청 작성',
     submitGoHome: '홈으로',
-    viewFolder: '저장된 폴더 열기',
     notConfigured: '신청 백엔드가 아직 연결되지 않았습니다. 잠시 후 다시 시도해주세요.',
   },
   en: {
@@ -170,9 +155,6 @@ const i18n = {
     managerPlaceholder: 'Person in charge',
     fieldContact: 'Contact',
     contactPlaceholder: '010-0000-0000',
-    fieldPhotos: 'Attach Photos (optional)',
-    addPhoto: 'Add Photo',
-    photoCountHint: (n) => `${n} photo${n === 1 ? '' : 's'} attached`,
     submitForm: 'Submit Request',
     formAlertNoIssue: 'Please enter the issue description.',
     backLabel: 'Back',
@@ -185,15 +167,12 @@ const i18n = {
     submittingTitle: 'Submitting',
     submittingDetail: 'Logging to sheet and uploading photos.\nPlease wait a moment.',
     submitSuccessTitle: 'Request Submitted',
-    submitSuccessBody: (n) => n > 0
-      ? `${n} photo${n === 1 ? '' : 's'} uploaded successfully.\nHQ AS team will contact you after review.`
-      : 'HQ AS team will contact you after reviewing the sheet.',
+    submitSuccessBody: 'HQ AS team will contact you after reviewing the sheet.',
     submitFailTitle: 'Submission Failed',
     submitFailBody: 'Please try again in a moment.',
     submitRetry: 'Retry',
     submitNewRequest: 'New Request',
     submitGoHome: 'Home',
-    viewFolder: 'Open Saved Folder',
     notConfigured: 'The submission backend is not yet connected. Please try again later.',
   },
 };
@@ -260,7 +239,6 @@ export default function App() {
   const [reqForm, setReqForm] = useState({
     branch: '', issue: '', location: '', manager: '', contact: '',
   });
-  const [reqPhotos, setReqPhotos] = useState([]);
   const [stores, setStores] = useState([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -407,25 +385,6 @@ export default function App() {
     setScreen('request');
   };
 
-  const handlePhotoAdd = (e) => {
-    const files = Array.from(e.target.files || []);
-    const newPhotos = files.map(f => ({
-      file: f,
-      url: URL.createObjectURL(f),
-      name: f.name,
-    }));
-    setReqPhotos(prev => [...prev, ...newPhotos]);
-    e.target.value = '';
-  };
-
-  const handlePhotoRemove = (idx) => {
-    setReqPhotos(prev => {
-      const removed = prev[idx];
-      if (removed) URL.revokeObjectURL(removed.url);
-      return prev.filter((_, i) => i !== idx);
-    });
-  };
-
   const handleRequestSubmit = async () => {
     if (!stores.includes(reqForm.branch)) {
       alert(t.selectStoreInvalid);
@@ -442,21 +401,18 @@ export default function App() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const photos = await Promise.all(
-        reqPhotos.map(p => fileToBase64(p.file))
-      );
       const payload = {
         branch: reqForm.branch,
         issue: reqForm.issue,
         location: reqForm.location,
         manager: reqForm.manager,
         contact: reqForm.contact,
-        photos,
       };
+      const body = utf8ToBase64(JSON.stringify(payload));
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain' },
+        body,
         redirect: 'follow',
       });
       const json = await res.json();
@@ -478,8 +434,6 @@ export default function App() {
       branch: prev.branch,
       issue: '', location: '', manager: '', contact: '',
     }));
-    reqPhotos.forEach(p => { try { URL.revokeObjectURL(p.url); } catch (e) {} });
-    setReqPhotos([]);
     setSubmitResult(null);
     setBranchSearch('');
     setBranchOpen(false);
@@ -846,17 +800,10 @@ export default function App() {
                   <CheckCircle2 className="w-9 h-9" style={{ color: '#3F8B5E' }} />
                 </div>
                 <div className="text-lg font-bold mb-2" style={{ color: INK }}>{t.submitSuccessTitle}</div>
-                <div className="text-sm leading-relaxed mb-6 whitespace-pre-line" style={{ color: INK_MUTED }}>
-                  {t.submitSuccessBody(submitResult.photoCount || 0)}
+                <div className="text-sm leading-relaxed mb-6" style={{ color: INK_MUTED }}>
+                  {t.submitSuccessBody}
                 </div>
                 <div className="space-y-2">
-                  {submitResult.folderUrl && (
-                    <a href={submitResult.folderUrl} target="_blank" rel="noopener noreferrer"
-                      className="w-full block py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-                      style={{ backgroundColor: IVORY, color: TEAL_DEEP, border: '1px solid #EFE7D2' }}>
-                      <ExternalLink className="w-4 h-4" />{t.viewFolder}
-                    </a>
-                  )}
                   <button onClick={resetRequestForm}
                     className="w-full py-3 rounded-xl text-sm font-bold"
                     style={{ backgroundColor: TEAL, color: '#FFFFFF' }}>
@@ -1002,34 +949,6 @@ export default function App() {
                   placeholder={t.contactPlaceholder}
                   className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none"
                   style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>
-                  {t.fieldPhotos}
-                  {reqPhotos.length > 0 && <span className="ml-2 text-[11px] font-medium" style={{ color: INK_MUTED }}>· {t.photoCountHint(reqPhotos.length)}</span>}
-                </label>
-                {reqPhotos.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mb-2">
-                    {reqPhotos.map((p, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: '1px solid #EFE7D2' }}>
-                        <img src={p.url} alt="" className="w-full h-full object-cover" />
-                        <button onClick={() => handlePhotoRemove(idx)} aria-label="remove"
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: 'white' }}>
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <label className="w-full py-3 rounded-xl border-2 border-dashed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition-transform"
-                  style={{ borderColor: '#C9B98C', color: TEAL_DEEP, backgroundColor: IVORY_SOFT }}>
-                  <Camera className="w-4 h-4" />
-                  <span>{t.addPhoto}</span>
-                  <input type="file" accept="image/*" multiple capture="environment"
-                    onChange={handlePhotoAdd} className="hidden" />
-                </label>
               </div>
 
               <div className="pt-3 space-y-2">
