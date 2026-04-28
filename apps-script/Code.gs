@@ -91,18 +91,20 @@ function doPost(e) {
       }
     }
 
-    // B컬럼 기준 마지막 데이터 행 찾기 (다른 컬럼에 멀리 떨어진 데이터가 있어도 영향 없음)
+    // A컬럼(접수넘버) 기준 마지막 데이터 행의 다음 = 첫 빈 행
+    // B/C/D 등 다른 컬럼의 기존 데이터에 영향받지 않음
     const sheetLastRow = Math.max(sheet.getLastRow(), 1);
-    const bValues = sheet.getRange(1, 2, sheetLastRow, 1).getValues();
-    let lastBRow = 1;
-    for (let i = bValues.length - 1; i >= 0; i--) {
-      const v = bValues[i][0];
+    const aValues = sheet.getRange(1, 1, sheetLastRow, 1).getValues();
+    let lastARow = 0;
+    for (let i = aValues.length - 1; i >= 0; i--) {
+      const v = aValues[i][0];
       if (v !== '' && v !== null && v !== undefined) {
-        lastBRow = i + 1;
+        lastARow = i + 1;
         break;
       }
     }
-    const newRow = lastBRow + 1;
+    // A가 비어있으면 헤더 다음(4행)부터 시작 (시트 1~3행이 헤더 영역)
+    const newRow = Math.max(lastARow + 1, 4);
 
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
@@ -115,7 +117,7 @@ function doPost(e) {
       row: newRow,
       sheetName: sheet.getName(),
       sheetLastRowBefore: sheetLastRow,
-      lastBRowBefore: lastBRow,
+      lastARowBefore: lastARow,
       branch: branch,
     });
   } catch (err) {
