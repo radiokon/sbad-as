@@ -5,7 +5,8 @@ import {
   Utensils, Wrench, CheckCircle2, XCircle,
   Home, BookOpen, AlertCircle,
   Clock, Shield, Leaf, ExternalLink, Settings,
-  Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe
+  Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe,
+  MessageSquare, Send, Camera, X, Plus
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
 
@@ -49,7 +50,7 @@ const i18n = {
     stepsHeading: '자가 점검 단계',
     tipLabel: '다움FC 활용 팁',
     callIfLabel: '본사 AS 신청 기준',
-    callHQ: '본사 AS팀 전화 (010-5420-4250)',
+    callHQ: '본사 AS팀 신청',
     daumSubmit: '다움FC 접수 (1년 이전 매장)',
     feedbackQuestion: '이 매뉴얼이 도움 되셨나요?',
     solved: '해결됐어요',
@@ -59,6 +60,28 @@ const i18n = {
     errorDefault: '매뉴얼 데이터를 불러오는 중 문제가 발생했어요.',
     retry: '다시 시도',
     langButton: 'EN',
+    requestTitle: '본사 AS팀 신청서',
+    requestIntro: '아래 양식을 작성하고 [신청하기]를 누르면 본사 AS팀(010-5420-4250)으로 문자가 발송됩니다.',
+    fieldStoreName: '매장명',
+    storePrefix: '샤브올데이',
+    storePlaceholder: '예: 강남점',
+    fieldIssue: '하자내용',
+    issuePlaceholder: '발생한 문제를 자세히 적어주세요',
+    fieldLocation: '위치',
+    locationPlaceholder: '예: 주방 우측 인덕션 3번',
+    fieldManager: '관리자',
+    managerPlaceholder: '담당자 성함',
+    fieldContact: '연락처',
+    contactPlaceholder: '010-0000-0000',
+    fieldPhotos: '사진 첨부 (선택)',
+    addPhoto: '사진 추가',
+    photoCountHint: (n) => `사진 ${n}장 첨부됨`,
+    photoNote: '⚠ 사진은 SMS에 첨부할 수 없어요. 신청 발송 후 010-5420-4250으로 카카오톡/MMS로 별도 전송해주세요.',
+    submitForm: '신청하기',
+    submitNote: '문자 메시지 앱이 열리면 [보내기]를 눌러주세요.',
+    formAlertNoIssue: '하자내용을 입력해주세요.',
+    formAlertPhotos: (n) => `📷 사진 ${n}장은 SMS로 함께 보낼 수 없습니다.\n\n발송 후 010-5420-4250으로 카카오톡 또는 MMS로 별도 전송해주세요.`,
+    backLabel: '뒤로',
   },
   en: {
     tagline: 'premium beef & veggies',
@@ -89,7 +112,7 @@ const i18n = {
     stepsHeading: 'DIY Check Steps',
     tipLabel: 'Daum FC Tips',
     callIfLabel: 'When to Request HQ AS',
-    callHQ: 'Call HQ AS Team (010-5420-4250)',
+    callHQ: 'Submit AS Request to HQ',
     daumSubmit: 'Submit to Daum FC (stores over 1 year)',
     feedbackQuestion: 'Was this manual helpful?',
     solved: 'Solved',
@@ -99,6 +122,28 @@ const i18n = {
     errorDefault: 'Failed to load manual data.',
     retry: 'Retry',
     langButton: '한',
+    requestTitle: 'AS Request Form',
+    requestIntro: 'Fill out the form and tap [Submit] to send an SMS to HQ AS Team (010-5420-4250).',
+    fieldStoreName: 'Store Name',
+    storePrefix: 'Shabuallday',
+    storePlaceholder: 'e.g., Gangnam',
+    fieldIssue: 'Issue Description',
+    issuePlaceholder: 'Describe the issue in detail',
+    fieldLocation: 'Location',
+    locationPlaceholder: 'e.g., Induction #3, kitchen right side',
+    fieldManager: 'Manager',
+    managerPlaceholder: 'Person in charge',
+    fieldContact: 'Contact',
+    contactPlaceholder: '010-0000-0000',
+    fieldPhotos: 'Attach Photos (optional)',
+    addPhoto: 'Add Photo',
+    photoCountHint: (n) => `${n} photo${n === 1 ? '' : 's'} attached`,
+    photoNote: '⚠ Photos cannot be attached to SMS. After submitting, please send photos separately via KakaoTalk or MMS to 010-5420-4250.',
+    submitForm: 'Submit Request',
+    submitNote: 'When the messaging app opens, tap [Send].',
+    formAlertNoIssue: 'Please enter the issue description.',
+    formAlertPhotos: (n) => `📷 ${n} photo${n === 1 ? '' : 's'} cannot be sent via SMS.\n\nAfter submitting, please send them separately via KakaoTalk or MMS to 010-5420-4250.`,
+    backLabel: 'Back',
   },
 };
 
@@ -161,6 +206,10 @@ export default function App() {
     if (typeof window === 'undefined') return 'ko';
     return localStorage.getItem('sbad_lang') || 'ko';
   });
+  const [reqForm, setReqForm] = useState({
+    branch: '', issue: '', location: '', manager: '', contact: '',
+  });
+  const [reqPhotos, setReqPhotos] = useState([]);
 
   const t = i18n[lang];
 
@@ -275,6 +324,52 @@ export default function App() {
   const goToCategory = (categoryId) => { setSelectedCategory(categoryId); setScreen('category'); };
   const goToSitemap = () => { setScreen('sitemap'); setSelectedCategory(null); setSelectedIssue(null); setSearch(''); };
   const toggleStep = (idx) => { setCompletedSteps(prev => ({ ...prev, [idx]: !prev[idx] })); };
+
+  const goToRequest = () => {
+    if (currentIssue && !reqForm.issue) {
+      setReqForm(prev => ({ ...prev, issue: currentIssue.title }));
+    }
+    setScreen('request');
+  };
+
+  const handlePhotoAdd = (e) => {
+    const files = Array.from(e.target.files || []);
+    const newPhotos = files.map(f => ({
+      file: f,
+      url: URL.createObjectURL(f),
+      name: f.name,
+    }));
+    setReqPhotos(prev => [...prev, ...newPhotos]);
+    e.target.value = '';
+  };
+
+  const handlePhotoRemove = (idx) => {
+    setReqPhotos(prev => {
+      const removed = prev[idx];
+      if (removed) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const handleRequestSubmit = () => {
+    if (!reqForm.issue.trim()) {
+      alert(t.formAlertNoIssue);
+      return;
+    }
+    if (reqPhotos.length > 0) {
+      alert(t.formAlertPhotos(reqPhotos.length));
+    }
+    const lines = [
+      `${t.fieldStoreName}: ${t.storePrefix}${reqForm.branch}`,
+      `${t.fieldIssue}: ${reqForm.issue}`,
+      `${t.fieldLocation}: ${reqForm.location}`,
+      `${t.fieldManager}: ${reqForm.manager}`,
+      `${t.fieldContact}: ${reqForm.contact}`,
+    ];
+    const text = lines.join('\n');
+    const smsLink = `sms:010-5420-4250?&body=${encodeURIComponent(text)}`;
+    window.location.href = smsLink;
+  };
 
   const currentCategory = categories.find(c => c.id === selectedCategory);
   const currentIssue = selectedIssue ? issueDetailsMap[selectedIssue] : null;
@@ -601,9 +696,9 @@ export default function App() {
                 </div>
               )}
               <div className="space-y-2 pt-2">
-                <a href="tel:010-5420-4250" className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" style={{ backgroundColor: TEAL, color: 'white' }}>
-                  <Phone className="w-4 h-4" />{t.callHQ}
-                </a>
+                <button onClick={goToRequest} className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm" style={{ backgroundColor: TEAL, color: 'white' }}>
+                  <MessageSquare className="w-4 h-4" />{t.callHQ}
+                </button>
                 <a href="https://fcdaum.com/" target="_blank" rel="noopener noreferrer" className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform" style={{ backgroundColor: IVORY, color: TEAL_DEEP, border: '1px solid #EFE7D2' }}>
                   <ExternalLink className="w-4 h-4" />{t.daumSubmit}
                 </a>
@@ -623,6 +718,107 @@ export default function App() {
           </>
         )}
 
+        {screen === 'request' && (
+          <>
+            <header className="px-5 pt-8 pb-5 sticky top-0 z-10" style={{ backgroundColor: TEAL, color: '#FFFFFF' }}>
+              <div className="flex items-center justify-between mb-3">
+                <button onClick={() => setScreen(currentIssue ? 'issue' : 'home')} className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity">
+                  <ChevronLeft className="w-4 h-4" />{t.backLabel}
+                </button>
+                <LangButton />
+              </div>
+              <h1 className="text-xl font-bold leading-tight">{t.requestTitle}</h1>
+              <div className="text-xs opacity-80 mt-1">{t.requestIntro}</div>
+            </header>
+
+            <div className="px-5 py-5 space-y-4 bg-white">
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>{t.fieldStoreName}</label>
+                <div className="flex items-stretch rounded-xl overflow-hidden border" style={{ borderColor: '#E5DEC9' }}>
+                  <span className="px-3 flex items-center text-sm font-medium" style={{ backgroundColor: IVORY, color: INK_MUTED }}>{t.storePrefix}</span>
+                  <input type="text" value={reqForm.branch} onChange={(e) => setReqForm({ ...reqForm, branch: e.target.value })}
+                    placeholder={t.storePlaceholder}
+                    className="flex-1 px-3 py-3 text-sm focus:outline-none"
+                    style={{ color: INK, backgroundColor: '#FFFFFF' }} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>
+                  {t.fieldIssue} <span style={{ color: '#C84A3F' }}>*</span>
+                </label>
+                <textarea value={reqForm.issue} onChange={(e) => setReqForm({ ...reqForm, issue: e.target.value })}
+                  placeholder={t.issuePlaceholder}
+                  rows={3}
+                  className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none resize-none"
+                  style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>{t.fieldLocation}</label>
+                <input type="text" value={reqForm.location} onChange={(e) => setReqForm({ ...reqForm, location: e.target.value })}
+                  placeholder={t.locationPlaceholder}
+                  className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none"
+                  style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>{t.fieldManager}</label>
+                <input type="text" value={reqForm.manager} onChange={(e) => setReqForm({ ...reqForm, manager: e.target.value })}
+                  placeholder={t.managerPlaceholder}
+                  className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none"
+                  style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>{t.fieldContact}</label>
+                <input type="tel" value={reqForm.contact} onChange={(e) => setReqForm({ ...reqForm, contact: e.target.value })}
+                  placeholder={t.contactPlaceholder}
+                  className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none"
+                  style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>
+                  {t.fieldPhotos}
+                  {reqPhotos.length > 0 && <span className="ml-2 text-[11px] font-medium" style={{ color: INK_MUTED }}>· {t.photoCountHint(reqPhotos.length)}</span>}
+                </label>
+                {reqPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {reqPhotos.map((p, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: '1px solid #EFE7D2' }}>
+                        <img src={p.url} alt="" className="w-full h-full object-cover" />
+                        <button onClick={() => handlePhotoRemove(idx)} aria-label="remove"
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: 'white' }}>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="w-full py-3 rounded-xl border-2 border-dashed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition-transform"
+                  style={{ borderColor: '#C9B98C', color: TEAL_DEEP, backgroundColor: IVORY_SOFT }}>
+                  <Camera className="w-4 h-4" />
+                  <span>{t.addPhoto}</span>
+                  <input type="file" accept="image/*" multiple capture="environment"
+                    onChange={handlePhotoAdd} className="hidden" />
+                </label>
+                <div className="text-[11px] mt-2 leading-relaxed" style={{ color: '#9C621A' }}>{t.photoNote}</div>
+              </div>
+
+              <div className="pt-3 space-y-2">
+                <button onClick={handleRequestSubmit}
+                  className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm"
+                  style={{ backgroundColor: TEAL, color: 'white' }}>
+                  <Send className="w-4 h-4" />{t.submitForm}
+                </button>
+                <div className="text-[11px] text-center" style={{ color: INK_MUTED }}>{t.submitNote}</div>
+              </div>
+            </div>
+          </>
+        )}
+
         <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 py-3" style={{ backgroundColor: '#FFFFFF', borderTop: '1px solid #EFE7D2' }}>
           <div className="flex justify-around">
             <button onClick={goHome} className="flex flex-col items-center gap-1 transition-colors py-1" style={{ color: screen === 'home' ? TEAL : INK_MUTED }}>
@@ -631,9 +827,9 @@ export default function App() {
             <button onClick={goToSitemap} className="flex flex-col items-center gap-1 transition-colors py-1" style={{ color: screen === 'sitemap' ? TEAL : INK_MUTED }}>
               <BookOpen className="w-5 h-5" /><span className="text-[10px] font-bold">{t.sitemapNav}</span>
             </button>
-            <a href="tel:010-5420-4250" className="flex flex-col items-center gap-1 transition-colors py-1" style={{ color: INK_MUTED }}>
-              <Phone className="w-5 h-5" /><span className="text-[10px] font-bold">{t.callNav}</span>
-            </a>
+            <button onClick={() => { setReqForm({ branch: '', issue: '', location: '', manager: '', contact: '' }); setScreen('request'); }} className="flex flex-col items-center gap-1 transition-colors py-1" style={{ color: screen === 'request' ? TEAL : INK_MUTED }}>
+              <MessageSquare className="w-5 h-5" /><span className="text-[10px] font-bold">{t.callNav}</span>
+            </button>
           </div>
         </nav>
       </div>
