@@ -9,6 +9,33 @@ import {
   MessageSquare, Send, Camera, X, Plus
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
+import { APPS_SCRIPT_URL, STORES_CSV_URL, isAppsScriptConfigured } from './asConfig.js';
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const idx = result.indexOf('base64,');
+      resolve({
+        name: file.name || 'photo.jpg',
+        mimeType: file.type || 'image/jpeg',
+        data: idx >= 0 ? result.substring(idx + 7) : result,
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function parseStoresCSV(text) {
+  const set = new Set();
+  text.replace(/\r/g, '').split('\n').forEach(line => {
+    const v = line.replace(/^"|"$/g, '').trim();
+    if (v) set.add(v);
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'));
+}
 
 const SHEET_ID = '15ikYhQMT9gt_WveoWxKTwi1f1yjHH02GObpmrzxl8a8';
 
@@ -76,12 +103,30 @@ const i18n = {
     fieldPhotos: '사진 첨부 (선택)',
     addPhoto: '사진 추가',
     photoCountHint: (n) => `사진 ${n}장 첨부됨`,
-    photoNote: '⚠ 사진은 SMS에 첨부할 수 없어요. 신청 발송 후 010-5420-4250으로 카카오톡/MMS로 별도 전송해주세요.',
+    photoNote: '신청하기를 누르면 사진이 본사 드라이브에 자동 업로드됩니다.',
     submitForm: '신청하기',
-    submitNote: '문자 메시지 앱이 열리면 [보내기]를 눌러주세요.',
+    submitNote: '신청하면 본사 시트에 자동 등록되고 사진이 드라이브에 업로드됩니다.',
     formAlertNoIssue: '하자내용을 입력해주세요.',
-    formAlertPhotos: (n) => `📷 사진 ${n}장은 SMS로 함께 보낼 수 없습니다.\n\n발송 후 010-5420-4250으로 카카오톡 또는 MMS로 별도 전송해주세요.`,
     backLabel: '뒤로',
+    selectStorePlaceholder: '매장 검색',
+    selectStoreLoading: '매장 목록 불러오는 중...',
+    selectStoreInvalid: '목록에서 매장을 선택해주세요.',
+    selectStoreNoResults: '검색 결과가 없습니다',
+    selectStoreFooter: (n) => `${n}개 매장`,
+    storeChange: '변경',
+    submittingTitle: '접수 처리 중',
+    submittingDetail: '시트 등록 + 사진 업로드 중입니다.\n잠시만 기다려주세요.',
+    submitSuccessTitle: '신청 접수 완료',
+    submitSuccessBody: (n) => n > 0
+      ? `사진 ${n}장이 함께 업로드되었습니다.\n본사 AS팀이 확인 후 연락드립니다.`
+      : '본사 AS팀이 시트에서 확인 후 연락드립니다.',
+    submitFailTitle: '접수 실패',
+    submitFailBody: '잠시 후 다시 시도해주세요.',
+    submitRetry: '다시 시도',
+    submitNewRequest: '새 신청 작성',
+    submitGoHome: '홈으로',
+    viewFolder: '저장된 폴더 열기',
+    notConfigured: '신청 백엔드가 아직 연결되지 않았습니다. 잠시 후 다시 시도해주세요.',
   },
   en: {
     tagline: 'premium beef & veggies',
@@ -138,12 +183,30 @@ const i18n = {
     fieldPhotos: 'Attach Photos (optional)',
     addPhoto: 'Add Photo',
     photoCountHint: (n) => `${n} photo${n === 1 ? '' : 's'} attached`,
-    photoNote: '⚠ Photos cannot be attached to SMS. After submitting, please send photos separately via KakaoTalk or MMS to 010-5420-4250.',
+    photoNote: 'Photos will be uploaded to the HQ Drive automatically when you submit.',
     submitForm: 'Submit Request',
-    submitNote: 'When the messaging app opens, tap [Send].',
+    submitNote: 'Your request is logged to the HQ sheet and photos uploaded to Drive automatically.',
     formAlertNoIssue: 'Please enter the issue description.',
-    formAlertPhotos: (n) => `📷 ${n} photo${n === 1 ? '' : 's'} cannot be sent via SMS.\n\nAfter submitting, please send them separately via KakaoTalk or MMS to 010-5420-4250.`,
     backLabel: 'Back',
+    selectStorePlaceholder: 'Search stores',
+    selectStoreLoading: 'Loading store list...',
+    selectStoreInvalid: 'Please select a store from the list.',
+    selectStoreNoResults: 'No matches',
+    selectStoreFooter: (n) => `${n} stores`,
+    storeChange: 'Change',
+    submittingTitle: 'Submitting',
+    submittingDetail: 'Logging to sheet and uploading photos.\nPlease wait a moment.',
+    submitSuccessTitle: 'Request Submitted',
+    submitSuccessBody: (n) => n > 0
+      ? `${n} photo${n === 1 ? '' : 's'} uploaded successfully.\nHQ AS team will contact you after review.`
+      : 'HQ AS team will contact you after reviewing the sheet.',
+    submitFailTitle: 'Submission Failed',
+    submitFailBody: 'Please try again in a moment.',
+    submitRetry: 'Retry',
+    submitNewRequest: 'New Request',
+    submitGoHome: 'Home',
+    viewFolder: 'Open Saved Folder',
+    notConfigured: 'The submission backend is not yet connected. Please try again later.',
   },
 };
 
@@ -210,6 +273,12 @@ export default function App() {
     branch: '', issue: '', location: '', manager: '', contact: '',
   });
   const [reqPhotos, setReqPhotos] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [storesLoaded, setStoresLoaded] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [branchSearch, setBranchSearch] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
 
   const t = i18n[lang];
 
@@ -225,6 +294,23 @@ export default function App() {
     setLang(next);
     try { localStorage.setItem('sbad_lang', next); } catch (e) {}
   };
+
+  useEffect(() => {
+    fetch(STORES_CSV_URL)
+      .then(r => r.text())
+      .then(text => {
+        const arr = parseStoresCSV(text);
+        setStores(arr);
+        setStoresLoaded(true);
+        try {
+          const saved = localStorage.getItem('sbad_branch');
+          if (saved && arr.includes(saved)) {
+            setReqForm(prev => prev.branch ? prev : { ...prev, branch: saved });
+          }
+        } catch (e) {}
+      })
+      .catch(() => setStoresLoaded(true));
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -351,25 +437,70 @@ export default function App() {
     });
   };
 
-  const handleRequestSubmit = () => {
+  const handleRequestSubmit = async () => {
+    if (!stores.includes(reqForm.branch)) {
+      alert(t.selectStoreInvalid);
+      return;
+    }
     if (!reqForm.issue.trim()) {
       alert(t.formAlertNoIssue);
       return;
     }
-    if (reqPhotos.length > 0) {
-      alert(t.formAlertPhotos(reqPhotos.length));
+    if (!isAppsScriptConfigured()) {
+      alert(t.notConfigured);
+      return;
     }
-    const lines = [
-      `${t.fieldStoreName}: ${t.storePrefix}${reqForm.branch}`,
-      `${t.fieldIssue}: ${reqForm.issue}`,
-      `${t.fieldLocation}: ${reqForm.location}`,
-      `${t.fieldManager}: ${reqForm.manager}`,
-      `${t.fieldContact}: ${reqForm.contact}`,
-    ];
-    const text = lines.join('\n');
-    const smsLink = `sms:010-5420-4250?&body=${encodeURIComponent(text)}`;
-    window.location.href = smsLink;
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const photos = await Promise.all(
+        reqPhotos.map(p => fileToBase64(p.file))
+      );
+      const payload = {
+        branch: reqForm.branch,
+        issue: reqForm.issue,
+        location: reqForm.location,
+        manager: reqForm.manager,
+        contact: reqForm.contact,
+        photos,
+      };
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+      });
+      const json = await res.json();
+      if (json && json.ok) {
+        try { localStorage.setItem('sbad_branch', reqForm.branch); } catch (e) {}
+        setSubmitResult(json);
+      } else {
+        setSubmitResult({ ok: false, error: (json && json.error) || 'unknown' });
+      }
+    } catch (err) {
+      setSubmitResult({ ok: false, error: (err && err.message) || 'network error' });
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const resetRequestForm = () => {
+    setReqForm(prev => ({
+      branch: prev.branch,
+      issue: '', location: '', manager: '', contact: '',
+    }));
+    reqPhotos.forEach(p => { try { URL.revokeObjectURL(p.url); } catch (e) {} });
+    setReqPhotos([]);
+    setSubmitResult(null);
+    setBranchSearch('');
+    setBranchOpen(false);
+  };
+
+  const filteredStores = useMemo(() => {
+    if (!branchSearch) return stores;
+    const q = branchSearch.toLowerCase();
+    return stores.filter(s => s.toLowerCase().includes(q));
+  }, [stores, branchSearch]);
 
   const currentCategory = categories.find(c => c.id === selectedCategory);
   const currentIssue = selectedIssue ? issueDetailsMap[selectedIssue] : null;
@@ -722,7 +853,7 @@ export default function App() {
           <>
             <header className="px-5 pt-8 pb-5 sticky top-0 z-10" style={{ backgroundColor: TEAL, color: '#FFFFFF' }}>
               <div className="flex items-center justify-between mb-3">
-                <button onClick={() => setScreen(currentIssue ? 'issue' : 'home')} className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity">
+                <button onClick={() => { setSubmitResult(null); setScreen(currentIssue ? 'issue' : 'home'); }} className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity">
                   <ChevronLeft className="w-4 h-4" />{t.backLabel}
                 </button>
                 <LangButton />
@@ -731,16 +862,137 @@ export default function App() {
               <div className="text-xs opacity-80 mt-1">{t.requestIntro}</div>
             </header>
 
-            <div className="px-5 py-5 space-y-4 bg-white">
-              <div>
-                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>{t.fieldStoreName}</label>
-                <div className="flex items-stretch rounded-xl overflow-hidden border" style={{ borderColor: '#E5DEC9' }}>
-                  <span className="px-3 flex items-center text-sm font-medium" style={{ backgroundColor: IVORY, color: INK_MUTED }}>{t.storePrefix}</span>
-                  <input type="text" value={reqForm.branch} onChange={(e) => setReqForm({ ...reqForm, branch: e.target.value })}
-                    placeholder={t.storePlaceholder}
-                    className="flex-1 px-3 py-3 text-sm focus:outline-none"
-                    style={{ color: INK, backgroundColor: '#FFFFFF' }} />
+            {submitResult && submitResult.ok && (
+              <div className="px-5 py-8 bg-white text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#DDEEDF' }}>
+                  <CheckCircle2 className="w-9 h-9" style={{ color: '#3F8B5E' }} />
                 </div>
+                <div className="text-lg font-bold mb-2" style={{ color: INK }}>{t.submitSuccessTitle}</div>
+                <div className="text-sm leading-relaxed mb-6 whitespace-pre-line" style={{ color: INK_MUTED }}>
+                  {t.submitSuccessBody(submitResult.photoCount || 0)}
+                </div>
+                <div className="space-y-2">
+                  {submitResult.folderUrl && (
+                    <a href={submitResult.folderUrl} target="_blank" rel="noopener noreferrer"
+                      className="w-full block py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                      style={{ backgroundColor: IVORY, color: TEAL_DEEP, border: '1px solid #EFE7D2' }}>
+                      <ExternalLink className="w-4 h-4" />{t.viewFolder}
+                    </a>
+                  )}
+                  <button onClick={resetRequestForm}
+                    className="w-full py-3 rounded-xl text-sm font-bold"
+                    style={{ backgroundColor: TEAL, color: '#FFFFFF' }}>
+                    {t.submitNewRequest}
+                  </button>
+                  <button onClick={() => { resetRequestForm(); setScreen('home'); }}
+                    className="w-full py-3 rounded-xl text-sm font-bold"
+                    style={{ backgroundColor: '#FFFFFF', color: INK_MUTED, border: '1px solid #EFE7D2' }}>
+                    {t.submitGoHome}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {submitResult && !submitResult.ok && (
+              <div className="px-5 py-8 bg-white text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FBE3E0' }}>
+                  <XCircle className="w-9 h-9" style={{ color: '#C84A3F' }} />
+                </div>
+                <div className="text-lg font-bold mb-2" style={{ color: INK }}>{t.submitFailTitle}</div>
+                <div className="text-sm leading-relaxed mb-2" style={{ color: INK_MUTED }}>{t.submitFailBody}</div>
+                {submitResult.error && (
+                  <div className="text-[11px] mb-6 px-3 py-2 rounded-lg inline-block" style={{ color: '#9C621A', backgroundColor: '#FBEBD3' }}>
+                    {submitResult.error}
+                  </div>
+                )}
+                <div className="space-y-2 mt-4">
+                  <button onClick={() => setSubmitResult(null)}
+                    className="w-full py-3 rounded-xl text-sm font-bold"
+                    style={{ backgroundColor: TEAL, color: '#FFFFFF' }}>
+                    {t.submitRetry}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!submitResult && (
+            <div className="px-5 py-5 space-y-4 bg-white relative">
+              {submitting && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.85)' }}>
+                  <div className="text-center">
+                    <Loader2 className="w-10 h-10 mx-auto animate-spin mb-3" style={{ color: TEAL }} />
+                    <div className="font-bold text-sm" style={{ color: INK }}>{t.submittingTitle}</div>
+                    <div className="text-xs mt-1 whitespace-pre-line" style={{ color: INK_MUTED }}>{t.submittingDetail}</div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>
+                  {t.fieldStoreName} <span style={{ color: '#C84A3F' }}>*</span>
+                </label>
+                {reqForm.branch && !branchOpen ? (
+                  <div className="flex items-center justify-between rounded-xl border px-3 py-3" style={{ borderColor: '#E5DEC9', backgroundColor: '#FFFFFF' }}>
+                    <span className="text-sm" style={{ color: INK }}>
+                      <span style={{ color: INK_MUTED }}>{t.storePrefix} </span>
+                      <span className="font-bold">{reqForm.branch}</span>
+                    </span>
+                    <button onClick={() => { setBranchOpen(true); setBranchSearch(''); }}
+                      className="text-xs font-bold px-2.5 py-1 rounded-md transition-colors"
+                      style={{ backgroundColor: IVORY, color: TEAL_DEEP }}>
+                      {t.storeChange}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="flex items-center rounded-xl border px-3" style={{ borderColor: '#E5DEC9', backgroundColor: '#FFFFFF' }}>
+                      <Search className="w-4 h-4 mr-2 flex-shrink-0" style={{ color: INK_MUTED }} />
+                      <input
+                        type="text"
+                        value={branchSearch}
+                        onChange={(e) => { setBranchSearch(e.target.value); setBranchOpen(true); }}
+                        onFocus={() => setBranchOpen(true)}
+                        placeholder={storesLoaded ? t.selectStorePlaceholder : t.selectStoreLoading}
+                        className="flex-1 py-3 text-sm focus:outline-none"
+                        style={{ color: INK, backgroundColor: 'transparent' }}
+                        disabled={!storesLoaded}
+                      />
+                      {branchSearch && (
+                        <button onClick={() => setBranchSearch('')} aria-label="clear">
+                          <X className="w-4 h-4" style={{ color: INK_MUTED }} />
+                        </button>
+                      )}
+                    </div>
+                    {branchOpen && storesLoaded && (
+                      <div className="absolute left-0 right-0 mt-1 rounded-xl border shadow-lg z-20 max-h-72 overflow-y-auto" style={{ borderColor: '#E5DEC9', backgroundColor: '#FFFFFF' }}>
+                        {filteredStores.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-sm" style={{ color: INK_MUTED }}>{t.selectStoreNoResults}</div>
+                        ) : (
+                          <>
+                            {filteredStores.map(s => (
+                              <button
+                                key={s}
+                                onClick={() => {
+                                  setReqForm({ ...reqForm, branch: s });
+                                  setBranchOpen(false);
+                                  setBranchSearch('');
+                                }}
+                                className="w-full text-left px-4 py-3 text-sm transition-colors"
+                                style={{ color: INK, borderBottom: '1px solid #F4EFDD' }}
+                              >
+                                <span style={{ color: INK_MUTED }}>{t.storePrefix} </span>
+                                <span className="font-medium">{s}</span>
+                              </button>
+                            ))}
+                            <div className="px-4 py-2 text-[11px] sticky bottom-0" style={{ color: INK_MUTED, backgroundColor: IVORY_SOFT }}>
+                              {t.selectStoreFooter(filteredStores.length)}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -808,14 +1060,15 @@ export default function App() {
               </div>
 
               <div className="pt-3 space-y-2">
-                <button onClick={handleRequestSubmit}
-                  className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm"
+                <button onClick={handleRequestSubmit} disabled={submitting}
+                  className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm disabled:opacity-60"
                   style={{ backgroundColor: TEAL, color: 'white' }}>
                   <Send className="w-4 h-4" />{t.submitForm}
                 </button>
-                <div className="text-[11px] text-center" style={{ color: INK_MUTED }}>{t.submitNote}</div>
+                <div className="text-[11px] text-center leading-relaxed" style={{ color: INK_MUTED }}>{t.submitNote}</div>
               </div>
             </div>
+            )}
           </>
         )}
 
