@@ -806,6 +806,9 @@ export default function App() {
                 {submitResult.sheetName && submitResult.row && (
                   <div className="text-[11px] mb-6 px-3 py-2 rounded-lg inline-block" style={{ color: INK_MUTED, backgroundColor: IVORY_SOFT, border: '1px solid #EFE7D2' }}>
                     {`${submitResult.sheetName} · ${submitResult.row}행`}
+                    {typeof submitResult.lastARow === 'number' && (
+                      <span className="ml-2 opacity-60">{`(A컬럼 마지막: ${submitResult.lastARow})`}</span>
+                    )}
                   </div>
                 )}
                 <div className="space-y-2">

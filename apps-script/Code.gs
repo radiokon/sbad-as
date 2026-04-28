@@ -91,32 +91,32 @@ function doPost(e) {
       }
     }
 
-    // A컬럼(접수넘버)에서 헤더(1~3행) 이후 처음으로 비어있는 행을 찾음.
-    // 본사가 처리한 행은 A에 접수넘버를 매기고, 처리 안 된 빈 영역은 A가 비어있다는 가정.
-    // 시트 maxRows까지 확장해서 검색 (sheet.getLastRow는 다른 컬럼 영향 받음)
-    const HEADER_ROWS = 3;
-    const maxRows = sheet.getMaxRows();
-    const aValues = sheet.getRange(1, 1, maxRows, 1).getValues();
+    // 헤더(1~3행) 이후, A/B/C/D/J 다섯 컬럼이 모두 비어있는 첫 행을 찾음.
+    // 어떤 컬럼이라도 채워져 있으면 '데이터 있는 행'으로 판단 (시트 자동수식 영향 회피).
+    const HEADER = 3;
+    const SEARCH_LIMIT = 2000;
+    const limit = Math.min(SEARCH_LIMIT, sheet.getMaxRows());
+    const block = sheet.getRange(1, 1, limit, 10).getValues();
+
+    const isEmpty = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || v === '';
+    const rowEmpty = (r) => isEmpty(r[0]) && isEmpty(r[1]) && isEmpty(r[2]) && isEmpty(r[3]) && isEmpty(r[9]);
+
     let newRow = 0;
-    for (let i = HEADER_ROWS; i < aValues.length; i++) {
-      const v = aValues[i][0];
-      if (v === '' || v === null || v === undefined) {
+    for (let i = HEADER; i < block.length; i++) {
+      if (rowEmpty(block[i])) {
         newRow = i + 1;
         break;
       }
     }
-    if (newRow === 0) newRow = maxRows + 1; // 못 찾으면 끝에 추가
 
-    // 안전장치: 그 행의 B/C/D/J가 이미 채워져 있으면 다음 빈 행으로 이동
-    // (본사가 A는 안 채웠지만 다른 컬럼에 일부 입력해둔 경우)
-    let scanRow = newRow;
-    while (scanRow <= maxRows) {
-      const row = sheet.getRange(scanRow, 1, 1, 10).getValues()[0];
-      const occupied = row[0] || row[1] || row[2] || row[3] || row[9];
-      if (!occupied) break;
-      scanRow++;
+    // 디버그: A컬럼 마지막 채워진 행
+    let lastARow = 0;
+    for (let i = block.length - 1; i >= 0; i--) {
+      if (!isEmpty(block[i][0])) { lastARow = i + 1; break; }
     }
-    newRow = scanRow;
+
+    // 못 찾으면 검색 범위 끝 다음
+    if (newRow === 0) newRow = limit + 1;
 
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
@@ -129,6 +129,8 @@ function doPost(e) {
       row: newRow,
       sheetName: sheet.getName(),
       branch: branch,
+      lastARow: lastARow,
+      searchedRows: block.length,
     });
   } catch (err) {
     return _json({ ok: false, error: String(err) });
