@@ -87,7 +87,6 @@ const i18n = {
     requestTitle: '본사 AS팀 신청서',
     requestIntro: '아래 양식을 작성하고 [신청하기]를 눌러주세요. 본사 시트에 자동 등록되고 사진은 드라이브에 업로드됩니다.',
     fieldStoreName: '매장명',
-    storePrefix: '샤브올데이',
     storePlaceholder: '예: 강남점',
     fieldIssue: '하자내용',
     issuePlaceholder: '발생한 문제를 자세히 적어주세요',
@@ -162,7 +161,6 @@ const i18n = {
     requestTitle: 'AS Request Form',
     requestIntro: 'Fill out the form and tap [Submit]. Your request is logged to the HQ sheet and photos uploaded to Drive.',
     fieldStoreName: 'Store Name',
-    storePrefix: 'Shabuallday',
     storePlaceholder: 'e.g., Gangnam',
     fieldIssue: 'Issue Description',
     issuePlaceholder: 'Describe the issue in detail',
@@ -912,10 +910,7 @@ export default function App() {
                 </label>
                 {reqForm.branch && !branchOpen ? (
                   <div className="flex items-center justify-between rounded-xl border px-3 py-3" style={{ borderColor: '#E5DEC9', backgroundColor: '#FFFFFF' }}>
-                    <span className="text-sm" style={{ color: INK }}>
-                      <span style={{ color: INK_MUTED }}>{t.storePrefix} </span>
-                      <span className="font-bold">{reqForm.branch}</span>
-                    </span>
+                    <span className="text-sm font-bold" style={{ color: INK }}>{reqForm.branch}</span>
                     <button onClick={() => { setBranchOpen(true); setBranchSearch(''); }}
                       className="text-xs font-bold px-2.5 py-1 rounded-md transition-colors"
                       style={{ backgroundColor: IVORY, color: TEAL_DEEP }}>
@@ -956,11 +951,10 @@ export default function App() {
                                   setBranchOpen(false);
                                   setBranchSearch('');
                                 }}
-                                className="w-full text-left px-4 py-3 text-sm transition-colors"
+                                className="w-full text-left px-4 py-3 text-sm font-medium transition-colors"
                                 style={{ color: INK, borderBottom: '1px solid #F4EFDD' }}
                               >
-                                <span style={{ color: INK_MUTED }}>{t.storePrefix} </span>
-                                <span className="font-medium">{s}</span>
+                                {s}
                               </button>
                             ))}
                             <div className="px-4 py-2 text-[11px] sticky bottom-0" style={{ color: INK_MUTED, backgroundColor: IVORY_SOFT }}>

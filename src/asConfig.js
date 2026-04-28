@@ -6,11 +6,12 @@ export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiPXHeR
 // 매장 마스터(접수 시트) ID — D컬럼 unique 추출용 (드롭다운 옵션 데이터 소스)
 export const REQUEST_SHEET_ID = '1HYnYrmdBX9Qzg3JV8gSaxXUysbIwvYPuXBMfGGJX3oE';
 
-// 매장 마스터 탭(gid=1021023439) B컬럼에서 매장명 가져오기.
-// B1은 헤더("매장명")라 B2부터. 빈 셀은 gviz가 자동 트리밍.
+// 매장 마스터 탭(gid=1021023439) B컬럼.
+// 매장 No 1~172 = 시트 행 5~176. 그 뒤(B177=안산선부 No.177, B178=경주용황 No.173)는
+// 비순차 추가 행이라 사용자 요청대로 제외.
 const STORES_GID = '1021023439';
 export const STORES_CSV_URL =
-  `https://docs.google.com/spreadsheets/d/${REQUEST_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${STORES_GID}&range=B2:B`;
+  `https://docs.google.com/spreadsheets/d/${REQUEST_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${STORES_GID}&range=B5:B176`;
 
 export const isAppsScriptConfigured = () =>
   APPS_SCRIPT_URL && APPS_SCRIPT_URL !== '__SET_APPS_SCRIPT_URL__';
