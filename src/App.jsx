@@ -7,6 +7,7 @@ import {
   Clock, Shield, Leaf, ExternalLink, Settings,
   Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe
 } from 'lucide-react';
+import { translations, translateTime } from './translations.js';
 
 const SHEET_ID = '15ikYhQMT9gt_WveoWxKTwi1f1yjHH02GObpmrzxl8a8';
 
@@ -101,10 +102,24 @@ const i18n = {
   },
 };
 
-const pick = (row, base, lang) => {
+const pick = (row, base, lang, fallbackEntry) => {
   if (!row) return '';
-  if (lang === 'en') return row[`${base}_en`] || row[base] || '';
+  if (lang === 'en') {
+    if (row[`${base}_en`]) return row[`${base}_en`];
+    if (fallbackEntry && fallbackEntry[base]) return fallbackEntry[base];
+    return row[base] || '';
+  }
   return row[base] || '';
+};
+
+const pickTime = (row, lang, fallbackEntry) => {
+  if (!row) return '';
+  if (lang === 'en') {
+    if (row.time_en) return row.time_en;
+    if (fallbackEntry && fallbackEntry.time) return fallbackEntry.time;
+    return translateTime(row.time || '');
+  }
+  return row.time || '';
 };
 
 function parseCSV(text) {
@@ -192,14 +207,14 @@ export default function App() {
     return data.categories
       .map(cat => ({
         ...cat,
-        label: pick(cat, 'label', lang),
+        label: pick(cat, 'label', lang, translations.categories[cat.id]),
         order: parseInt(cat.order) || 999,
         issues: data.issues
           .filter(iss => iss.category_id === cat.id)
           .map(iss => ({
             ...iss,
-            title: pick(iss, 'title', lang),
-            time: pick(iss, 'time', lang),
+            title: pick(iss, 'title', lang, translations.issues[iss.id]),
+            time: pickTime(iss, lang, translations.issues[iss.id]),
             order: parseInt(iss.order) || 999,
           }))
           .sort((a, b) => a.order - b.order),
@@ -212,22 +227,27 @@ export default function App() {
     data.issues.forEach(iss => {
       const stepsList = data.steps
         .filter(s => s.issue_id === iss.id)
-        .map(s => ({
-          ...s,
-          title: pick(s, 'title', lang),
-          desc: pick(s, 'desc', lang),
-          order: parseInt(s.order) || 999,
-        }))
+        .map(s => {
+          const stepKey = `${s.issue_id}_${s.order}`;
+          const stepFallback = translations.steps[stepKey];
+          return {
+            ...s,
+            title: pick(s, 'title', lang, stepFallback),
+            desc: pick(s, 'desc', lang, stepFallback),
+            order: parseInt(s.order) || 999,
+          };
+        })
         .sort((a, b) => a.order - b.order);
       const detail = data.details.find(d => d.issue_id === iss.id) || {};
+      const detailFallback = translations.details[iss.id];
       const cat = data.categories.find(c => c.id === iss.category_id);
       map[iss.id] = {
-        title: pick(iss, 'title', lang),
-        category: cat ? pick(cat, 'label', lang) : '',
-        warning: pick(detail, 'warning', lang) || null,
+        title: pick(iss, 'title', lang, translations.issues[iss.id]),
+        category: cat ? pick(cat, 'label', lang, translations.categories[cat.id]) : '',
+        warning: pick(detail, 'warning', lang, detailFallback) || null,
         steps: stepsList,
-        callIf: pick(detail, 'callIf', lang),
-        tip: pick(detail, 'tip', lang) || null,
+        callIf: pick(detail, 'callIf', lang, detailFallback),
+        tip: pick(detail, 'tip', lang, detailFallback) || null,
       };
     });
     return map;
