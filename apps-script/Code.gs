@@ -44,7 +44,17 @@ function _decodeBody(raw) {
 }
 
 function doGet(e) {
-  return _json({ ok: true, message: 'AS request endpoint. POST to submit.' });
+  try {
+    const action = e && e.parameter && e.parameter.action;
+    if (action === 'tabs') {
+      const ss = SpreadsheetApp.openById(SHEET_ID);
+      const tabs = ss.getSheets().map(s => ({ name: s.getName(), id: s.getSheetId() }));
+      return _json({ ok: true, target: SHEET_NAME, tabs: tabs });
+    }
+    return _json({ ok: true, message: 'AS request endpoint. POST to submit.' });
+  } catch (err) {
+    return _json({ ok: false, error: String(err) });
+  }
 }
 
 function doPost(e) {
@@ -66,9 +76,19 @@ function doPost(e) {
     const issueSummary = _summary(issue, 30);
 
     const ss = SpreadsheetApp.openById(SHEET_ID);
-    const sheet = ss.getSheetByName(SHEET_NAME);
+    let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) {
-      return _json({ ok: false, error: `시트 탭 '${SHEET_NAME}'을(를) 찾을 수 없습니다.` });
+      // fallback: 'AS' 키워드 포함하는 탭 찾기 (이모지 매칭 실패 대비)
+      const candidates = ss.getSheets().filter(s => /AS/i.test(s.getName()));
+      if (candidates.length === 1) {
+        sheet = candidates[0];
+      } else {
+        const all = ss.getSheets().map(s => s.getName());
+        return _json({
+          ok: false,
+          error: `'${SHEET_NAME}' 탭을 찾을 수 없습니다. 시트의 탭 목록: [${all.map(n => `"${n}"`).join(', ')}]`,
+        });
+      }
     }
 
     const newRow = sheet.getLastRow() + 1;
