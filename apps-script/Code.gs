@@ -15,6 +15,7 @@
 
 const SHEET_ID = '1HYnYrmdBX9Qzg3JV8gSaxXUysbIwvYPuXBMfGGJX3oE';
 const SHEET_NAME = '🚑AS리스트';
+const FOLDER_ID = '10p3MrySfZRFsghn_n33-JhgFUhoGaJ_u';
 const TZ = 'Asia/Seoul';
 
 function _json(obj) {
@@ -27,6 +28,10 @@ function _summary(s, max) {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
   return t.substring(0, max);
+}
+
+function _safeFileName(s) {
+  return String(s || '').replace(/[\\\/:*?"<>|\r\n\t]/g, '').trim();
 }
 
 /** UTF-8 안전 디코딩: 클라이언트가 base64(UTF-8) 또는 평문 JSON 둘 다 처리 */
@@ -70,7 +75,7 @@ function doGet(e) {
       return _json({ ok: true, sheet: sheet.getName(), rows: rows });
     }
     if (action === 'version') {
-      return _json({ ok: true, version: 'v4-append-2026-04-29' });
+      return _json({ ok: true, version: 'v5-append-with-drive-2026-04-29' });
     }
     return _json({ ok: true, message: 'AS request endpoint. POST to submit.' });
   } catch (err) {
@@ -88,12 +93,18 @@ function doPost(e) {
 
     const branch = String(data.branch || '').trim();
     const issue = String(data.issue || '').trim();
+    const location = String(data.location || '').trim();
+    const manager = String(data.manager || '').trim();
+    const contact = String(data.contact || '').trim();
+    const photos = Array.isArray(data.photos) ? data.photos : [];
 
     if (!branch) return _json({ ok: false, error: '매장명 누락' });
     if (!issue) return _json({ ok: false, error: '하자내용 누락' });
 
     const now = new Date();
     const sheetDate = Utilities.formatDate(now, TZ, 'yyyy. MM. dd');
+    const folderDateStr = Utilities.formatDate(now, TZ, 'yyyyMMdd');
+    const fileStamp = Utilities.formatDate(now, TZ, 'yyyyMMdd_HHmmss');
     const issueSummary = _summary(issue, 30);
 
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -138,10 +149,53 @@ function doPost(e) {
     const lastDataRow = Math.max(lastA, lastB, lastC, lastD, lastJ, lastK, lastL, lastM);
     let newRow = Math.max(lastDataRow + 1, 4); // 헤더 영역(1~3) 보호
 
+    // 드라이브 폴더 생성 (사진 + TXT 보관)
+    let folderUrl = '';
+    let photoCount = 0;
+    try {
+      const parent = DriveApp.getFolderById(FOLDER_ID);
+      const folderName = `${folderDateStr}_${_safeFileName(branch)}_${_safeFileName(issueSummary)}`;
+      const folder = parent.createFolder(folderName);
+
+      // 사진 업로드
+      photos.forEach((p, idx) => {
+        try {
+          if (!p || !p.data) return;
+          const mime = p.mimeType || 'image/jpeg';
+          const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+          const name = p.name || `photo_${idx + 1}.${ext}`;
+          const blob = Utilities.newBlob(Utilities.base64Decode(p.data), mime, name);
+          folder.createFile(blob);
+          photoCount += 1;
+        } catch (er) { /* 한 장 실패해도 나머지 진행 */ }
+      });
+
+      // TXT 저장 (접수 내용 기록)
+      const txt = [
+        `접수일자: ${sheetDate} ${Utilities.formatDate(now, TZ, 'HH:mm:ss')}`,
+        `매장명: ${branch}`,
+        `하자내용: ${issue}`,
+        `위치: ${location}`,
+        `관리자: ${manager}`,
+        `연락처: ${contact}`,
+        `사진: ${photoCount}장`,
+      ].join('\n');
+      folder.createFile(`${fileStamp}_접수내용.txt`, txt, 'text/plain');
+
+      folderUrl = folder.getUrl();
+    } catch (er) {
+      // 드라이브 실패해도 시트는 계속 처리
+      folderUrl = '';
+    }
+
     sheet.getRange(newRow, 2).setValue(sheetDate); // B 접수일자
     sheet.getRange(newRow, 3).setValue('APP');      // C 접수채널
     sheet.getRange(newRow, 4).setValue(branch);     // D 매장명 (E~H 자동)
     sheet.getRange(newRow, 10).setValue(issueSummary); // J 접수내용
+    if (folderUrl) {
+      const linkLabel = photoCount > 0 ? `사진 ${photoCount}장` : '폴더';
+      sheet.getRange(newRow, 11).setFormula(`=HYPERLINK("${folderUrl}","${linkLabel}")`); // K 사진 폴더 링크
+    }
     SpreadsheetApp.flush();
 
     return _json({
@@ -149,9 +203,8 @@ function doPost(e) {
       row: newRow,
       sheetName: sheet.getName(),
       branch: branch,
-      version: 'v4-append',
-      lastDataRow: lastDataRow,
-      lastA: lastA, lastB: lastB, lastC: lastC, lastD: lastD, lastJ: lastJ,
+      version: 'v5-append-with-drive',
+      photoCount: photoCount,
     });
   } catch (err) {
     return _json({ ok: false, error: String(err) });

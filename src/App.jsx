@@ -6,7 +6,7 @@ import {
   Home, BookOpen, AlertCircle,
   Clock, Shield, Leaf, ExternalLink, Settings,
   Armchair, LayoutGrid, Tag, Droplets, Info, Loader2, Globe,
-  MessageSquare, Send, X
+  MessageSquare, Send, X, Camera
 } from 'lucide-react';
 import { translations, translateTime } from './translations.js';
 import { APPS_SCRIPT_URL, STORES_CSV_URL, EXCLUDED_STORES, isAppsScriptConfigured } from './asConfig.js';
@@ -17,6 +17,24 @@ function utf8ToBase64(str) {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
+}
+
+// 사진 File 객체를 base64로 변환 (드라이브 업로드용)
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const idx = result.indexOf('base64,');
+      resolve({
+        name: file.name || 'photo.jpg',
+        mimeType: file.type || 'image/jpeg',
+        data: idx >= 0 ? result.substring(idx + 7) : result,
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function parseStoresCSV(text) {
@@ -87,6 +105,9 @@ const i18n = {
     managerPlaceholder: '담당자 성함',
     fieldContact: '연락처',
     contactPlaceholder: '010-0000-0000',
+    fieldPhotos: '사진 첨부 (선택)',
+    addPhoto: '사진 추가',
+    photoCountHint: (n) => `${n}장 첨부됨`,
     submitForm: '신청하기',
     formAlertNoIssue: '하자내용을 입력해주세요.',
     backLabel: '뒤로',
@@ -155,6 +176,9 @@ const i18n = {
     managerPlaceholder: 'Person in charge',
     fieldContact: 'Contact',
     contactPlaceholder: '010-0000-0000',
+    fieldPhotos: 'Attach Photos (optional)',
+    addPhoto: 'Add Photo',
+    photoCountHint: (n) => `${n} attached`,
     submitForm: 'Submit Request',
     formAlertNoIssue: 'Please enter the issue description.',
     backLabel: 'Back',
@@ -239,6 +263,7 @@ export default function App() {
   const [reqForm, setReqForm] = useState({
     branch: '', issue: '', location: '', manager: '', contact: '',
   });
+  const [reqPhotos, setReqPhotos] = useState([]);
   const [stores, setStores] = useState([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -385,6 +410,25 @@ export default function App() {
     setScreen('request');
   };
 
+  const handlePhotoAdd = (e) => {
+    const files = Array.from(e.target.files || []);
+    const newPhotos = files.map(f => ({
+      file: f,
+      url: URL.createObjectURL(f),
+      name: f.name,
+    }));
+    setReqPhotos(prev => [...prev, ...newPhotos]);
+    e.target.value = '';
+  };
+
+  const handlePhotoRemove = (idx) => {
+    setReqPhotos(prev => {
+      const removed = prev[idx];
+      if (removed) { try { URL.revokeObjectURL(removed.url); } catch (e) {} }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
   const handleRequestSubmit = async () => {
     if (!stores.includes(reqForm.branch)) {
       alert(t.selectStoreInvalid);
@@ -401,12 +445,14 @@ export default function App() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
+      const photos = await Promise.all(reqPhotos.map(p => fileToBase64(p.file)));
       const payload = {
         branch: reqForm.branch,
         issue: reqForm.issue,
         location: reqForm.location,
         manager: reqForm.manager,
         contact: reqForm.contact,
+        photos,
       };
       const body = utf8ToBase64(JSON.stringify(payload));
       const res = await fetch(APPS_SCRIPT_URL, {
@@ -434,6 +480,8 @@ export default function App() {
       branch: prev.branch,
       issue: '', location: '', manager: '', contact: '',
     }));
+    reqPhotos.forEach(p => { try { URL.revokeObjectURL(p.url); } catch (e) {} });
+    setReqPhotos([]);
     setSubmitResult(null);
     setBranchSearch('');
     setBranchOpen(false);
@@ -800,20 +848,9 @@ export default function App() {
                   <CheckCircle2 className="w-9 h-9" style={{ color: '#3F8B5E' }} />
                 </div>
                 <div className="text-lg font-bold mb-2" style={{ color: INK }}>{t.submitSuccessTitle}</div>
-                <div className="text-sm leading-relaxed mb-2" style={{ color: INK_MUTED }}>
+                <div className="text-sm leading-relaxed mb-6" style={{ color: INK_MUTED }}>
                   {t.submitSuccessBody}
                 </div>
-                {submitResult.sheetName && submitResult.row && (
-                  <div className="text-[11px] mb-6 px-3 py-2 rounded-lg" style={{ color: INK_MUTED, backgroundColor: IVORY_SOFT, border: '1px solid #EFE7D2' }}>
-                    <div className="font-bold mb-1">{`${submitResult.sheetName} · ${submitResult.row}행`}</div>
-                    {(typeof submitResult.lastA === 'number') && (
-                      <div className="opacity-70 leading-relaxed">
-                        {`A:${submitResult.lastA} B:${submitResult.lastB} C:${submitResult.lastC} D:${submitResult.lastD} J:${submitResult.lastJ}`}
-                        {submitResult.version && <span className="ml-2">· {submitResult.version}</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
                 <div className="space-y-2">
                   <button onClick={resetRequestForm}
                     className="w-full py-3 rounded-xl text-sm font-bold"
@@ -960,6 +997,36 @@ export default function App() {
                   placeholder={t.contactPlaceholder}
                   className="w-full px-3 py-3 rounded-xl border text-sm focus:outline-none"
                   style={{ borderColor: '#E5DEC9', color: INK, backgroundColor: '#FFFFFF' }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: INK }}>
+                  {t.fieldPhotos}
+                  {reqPhotos.length > 0 && (
+                    <span className="ml-2 text-[11px] font-medium" style={{ color: INK_MUTED }}>· {t.photoCountHint(reqPhotos.length)}</span>
+                  )}
+                </label>
+                {reqPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {reqPhotos.map((p, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: '1px solid #EFE7D2' }}>
+                        <img src={p.url} alt="" className="w-full h-full object-cover" />
+                        <button onClick={() => handlePhotoRemove(idx)} aria-label="remove"
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: 'white' }}>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="w-full py-3 rounded-xl border-2 border-dashed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition-transform"
+                  style={{ borderColor: '#C9B98C', color: TEAL_DEEP, backgroundColor: IVORY_SOFT }}>
+                  <Camera className="w-4 h-4" />
+                  <span>{t.addPhoto}</span>
+                  <input type="file" accept="image/*" multiple capture="environment"
+                    onChange={handlePhotoAdd} className="hidden" />
+                </label>
               </div>
 
               <div className="pt-3 space-y-2">
